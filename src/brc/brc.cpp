@@ -40,12 +40,15 @@ auto brc::execute(std::filesystem::path file_path) -> void {
         station.count += 1;
         station.total += val;
 
-        if (val > station.max) {
+        station.max = (val + station.max + std::abs(val - station.max)) / 2;
+        station.min = (val + station.min - std::abs(val - station.min)) / 2;
+
+        /*if (val > station.max) {
             station.max = val;
         } 
         if (val < station.min) {
             station.min = val;
-        }
+        }*/
     }
     mmap.unmap();
     
