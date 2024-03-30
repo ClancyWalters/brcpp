@@ -13,4 +13,8 @@ Using std::string_view 29708ms ± 416ms
 absl::flat_hash_map 26320ms ± 158ms
 absl::node_hash_map 25974ms ± 78ms
 absl::node_hash_map & std::string_vew 29415ms ± 59ms
+unordered_dense::map 30760ms ± 400ms
+absl::node_hash_map & unordered_dense::hash 26141ms ± 732ms
+unordered_dense::map & absl::hash 31331ms ± 3039ms
+absl::node_hash_map & std::hash 30354ms ± 3369ms
 ```
