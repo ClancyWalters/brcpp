@@ -17,15 +17,15 @@ auto brc::execute(std::filesystem::path file_path) -> void {
     auto size = mmap.mapped_length();
 
     size_t ptr = 0;
-    size_t line_start = 0;
+    size_t start = 0;
     while (ptr < size - 1) {
-        line_start = ptr;
+        start = ptr;
         while (mmap[ptr] != ';') { ptr++; }
-        auto line = std::string(&mmap[line_start], ptr++ - line_start);
+        auto name = std::string(&mmap[start], ptr++ - start);
         
-        auto split_point = line.find(";");
-        auto name = line.substr(0, split_point);
-        auto val = std::stod(line.substr(split_point+1, line.length()));
+        start = ptr;
+        while (mmap[ptr] != '\n') { ptr++; }
+        auto val = std::stod(std::string(&mmap[start], ptr++ - start));
 
         if (stations.contains(name)) {
             auto& station = stations[name];
