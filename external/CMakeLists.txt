@@ -20,3 +20,12 @@ FetchContent_Declare(
   GIT_TAG        v4.3.11
 )
 FetchContent_MakeAvailable(nanobench)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+FetchContent_Declare(
+  abseil
+  GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+  GIT_TAG        20240116.1
+)
+FetchContent_MakeAvailable(abseil)

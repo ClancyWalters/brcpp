@@ -8,10 +8,11 @@
 #include <print>
 
 #include <mio/mmap.hpp>
+#include <absl/container/node_hash_map.h>
 
 auto brc::execute(std::filesystem::path file_path) -> void {
     
-    auto stations = std::unordered_map<std::string, brc::Station>{};
+    auto stations = absl::node_hash_map<std::string, brc::Station>{};
 
     auto mmap = mio::mmap_source(file_path.string());
     auto size = mmap.mapped_length();
@@ -33,8 +34,9 @@ auto brc::execute(std::filesystem::path file_path) -> void {
             val = (mmap[ptr] - '0') * 100 + (mmap[ptr + 1] - '0') * 10 + mmap[ptr + 3] - '0';
             ptr += 5;
         }
+        
         val *= negative ? -1 : 1;
-
+        
         auto& station = stations[name];
 
         station.count += 1;
@@ -48,7 +50,7 @@ auto brc::execute(std::filesystem::path file_path) -> void {
         }
     }
     mmap.unmap();
-    
+
     auto station_names = std::set<std::string>();
     station_names.insert_range(std::views::keys(stations));
 
