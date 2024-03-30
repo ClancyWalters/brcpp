@@ -33,7 +33,7 @@ auto brc::execute(std::filesystem::path file_path) -> void {
             val = (mmap[ptr] - '0') * 100 + (mmap[ptr + 1] - '0') * 10 + mmap[ptr + 3] - '0';
             ptr += 5;
         }
-        val *= negative * 2 - 1;
+        val *= negative * -2 + 1;
 
         auto& station = stations[name];
 
