@@ -6,7 +6,7 @@
 #include <nanobench.h>
 
 int main(int argc, char *argv[]) {    
-    ankerl::nanobench::Bench().epochs(5).run("benchmark", [&] {
+    ankerl::nanobench::Bench().epochs(10).run("benchmark", [&] {
         brc::execute(std::filesystem::path("../../../../res/measurements.txt"));
     });
 }
