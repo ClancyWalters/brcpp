@@ -5,6 +5,7 @@ target_link_libraries(brcpp
     PUBLIC
     mio::mio
     absl::node_hash_map
+    phmap::phmap
 )
 
 add_executable(brcpptest "test.cpp"  "brc/brc.hpp" "brc/brc.cpp")
@@ -14,6 +15,7 @@ target_link_libraries(brcpptest
     doctest::doctest
     mio::mio
     absl::node_hash_map
+    phmap::phmap
 )
 
 add_executable(brcppbench "bench.cpp"  "brc/brc.hpp" "brc/brc.cpp")
@@ -23,4 +25,5 @@ target_link_libraries(brcppbench
     mio::mio
     nanobench::nanobench
     absl::node_hash_map
+    phmap::phmap
 )

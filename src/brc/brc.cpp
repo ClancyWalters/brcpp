@@ -6,14 +6,18 @@
 #include <set>
 #include <ranges>
 #include <print>
+#include <thread>
 
 #include <mio/mmap.hpp>
 #include <absl/container/node_hash_map.h>
+#include <parallel_hashmap/phmap.h>
 
-constexpr auto THREAD_COUNT = 6;
+constexpr auto THREAD_COUNT = 12;
 
-absl::node_hash_map<std::string, brc::Station> processBlock(mio::mmap_source& mmap, size_t start, size_t len) {
-    auto stations = absl::node_hash_map<std::string, brc::Station>{};
+using parallel_hashmap = phmap::parallel_flat_hash_map<std::string, brc::Station, phmap::priv::hash_default_hash<std::string>, phmap::priv::hash_default_eq<std::string>, std::allocator<std::pair<const std::string, brc::Station>>, 8, std::mutex>;
+
+void processBlock(mio::mmap_source& mmap, parallel_hashmap& stations, size_t start, size_t len) {
+    auto block_stations = absl::node_hash_map<std::string, brc::Station>{};
 
     size_t endpoint = start + len;
     size_t ptr = start;
@@ -46,7 +50,7 @@ absl::node_hash_map<std::string, brc::Station> processBlock(mio::mmap_source& mm
         
         val *= negative ? -1 : 1;
 
-        auto& station = stations[name];
+        auto& station = block_stations[name];
 
         station.count += 1;
         station.total += val;
@@ -59,31 +63,41 @@ absl::node_hash_map<std::string, brc::Station> processBlock(mio::mmap_source& mm
         }
     }
 
-    return std::move(stations);
+    for (const auto& pair : block_stations) {
+
+        stations.lazy_emplace_l(std::move(pair.first), [&](parallel_hashmap::value_type& station){
+            station.second.count += pair.second.count;
+            station.second.total += pair.second.total;
+            if (pair.second.max > station.second.max) {
+                station.second.max = pair.second.max;
+            } 
+            if (pair.second.min < station.second.min) {
+                station.second.min = pair.second.min;
+            }
+        }, [&](const parallel_hashmap::constructor& ctor){
+            ctor(pair.first, pair.second);
+        });
+    }
 }
 
 auto brc::execute(std::filesystem::path file_path) -> void {
     
-    auto stations = absl::node_hash_map<std::string, brc::Station>{};
-
+    auto stations = parallel_hashmap{};
+    
     auto mmap = mio::mmap_source(file_path.string());
     auto size = mmap.mapped_length();
 
     auto block_size = size / THREAD_COUNT;
 
-    for (int i = 0; i < THREAD_COUNT; i++) {
-        auto station_section = processBlock(mmap, i * block_size, block_size);
+    auto threads = std::array<std::thread, THREAD_COUNT>();
 
-        for (const auto& pair : station_section) {
-            stations[pair.first].count += pair.second.count;
-            stations[pair.first].total += pair.second.total;
-            if (pair.second.max > stations[pair.first].max) {
-                stations[pair.first].max = pair.second.max;
-            } 
-            if (pair.second.min < stations[pair.first].min) {
-                stations[pair.first].min = pair.second.min;
-            }
-        }
+    for (int i = 0; i < threads.size(); i++) {
+        //processBlock(mmap, stations, i * block_size, block_size);
+        threads[i] = std::thread(processBlock, std::ref(mmap), std::ref(stations), i * block_size, block_size);
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
     }
 
     mmap.unmap();
