@@ -33,22 +33,19 @@ auto brc::execute(std::filesystem::path file_path) -> void {
             val = (mmap[ptr] - '0') * 100 + (mmap[ptr + 1] - '0') * 10 + mmap[ptr + 3] - '0';
             ptr += 5;
         }
-        val *= negative * -2 + 1;
+        val *= negative ? -1 : 1;
 
         auto& station = stations[name];
 
         station.count += 1;
         station.total += val;
 
-        station.max = (val + station.max + std::abs(val - station.max)) / 2;
-        station.min = (val + station.min - std::abs(val - station.min)) / 2;
-
-        /*if (val > station.max) {
+        if (val > station.max) {
             station.max = val;
         } 
         if (val < station.min) {
             station.min = val;
-        }*/
+        }
     }
     mmap.unmap();
     
