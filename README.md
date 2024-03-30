@@ -17,4 +17,6 @@ unordered_dense::map 30760ms ± 400ms
 absl::node_hash_map & unordered_dense::hash 26141ms ± 732ms
 unordered_dense::map & absl::hash 31331ms ± 3039ms
 absl::node_hash_map & std::hash 30354ms ± 3369ms
+single threaded blocked 33629ms ± 403ms
+
 ```

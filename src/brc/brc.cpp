@@ -10,17 +10,26 @@
 #include <mio/mmap.hpp>
 #include <absl/container/node_hash_map.h>
 
-auto brc::execute(std::filesystem::path file_path) -> void {
-    
+constexpr auto THREAD_COUNT = 6;
+
+absl::node_hash_map<std::string, brc::Station> processBlock(mio::mmap_source& mmap, size_t start, size_t len) {
     auto stations = absl::node_hash_map<std::string, brc::Station>{};
 
-    auto mmap = mio::mmap_source(file_path.string());
-    auto size = mmap.mapped_length();
+    size_t endpoint = start + len;
+    size_t ptr = start;
 
-    size_t ptr = 0;
-    size_t start = 0;
-    int32_t val = 0;
-    while (ptr < size - 1) {
+    if (endpoint < mmap.mapped_length() && mmap[endpoint] != '\n') {
+        while (mmap[endpoint] != '\n') {
+            endpoint++;
+        }
+    }
+
+    if (ptr != 0) {
+        while (mmap[ptr++] != '\n') {}
+    }
+
+    int64_t val;
+    while (ptr < endpoint - 1) {
         start = ptr;
         while (mmap[ptr] != ';') { ptr++; }
         auto name = std::string(&mmap[start], ptr++ - start);
@@ -36,7 +45,7 @@ auto brc::execute(std::filesystem::path file_path) -> void {
         }
         
         val *= negative ? -1 : 1;
-        
+
         auto& station = stations[name];
 
         station.count += 1;
@@ -49,6 +58,34 @@ auto brc::execute(std::filesystem::path file_path) -> void {
             station.min = val;
         }
     }
+
+    return std::move(stations);
+}
+
+auto brc::execute(std::filesystem::path file_path) -> void {
+    
+    auto stations = absl::node_hash_map<std::string, brc::Station>{};
+
+    auto mmap = mio::mmap_source(file_path.string());
+    auto size = mmap.mapped_length();
+
+    auto block_size = size / THREAD_COUNT;
+
+    for (int i = 0; i < THREAD_COUNT; i++) {
+        auto station_section = processBlock(mmap, i * block_size, block_size);
+
+        for (const auto& pair : station_section) {
+            stations[pair.first].count += pair.second.count;
+            stations[pair.first].total += pair.second.total;
+            if (pair.second.max > stations[pair.first].max) {
+                stations[pair.first].max = pair.second.max;
+            } 
+            if (pair.second.min < stations[pair.first].min) {
+                stations[pair.first].min = pair.second.min;
+            }
+        }
+    }
+
     mmap.unmap();
 
     auto station_names = std::set<std::string>();
