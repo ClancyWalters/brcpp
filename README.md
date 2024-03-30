@@ -1,6 +1,7 @@
 
 ```
-Baseline 176260 ms
-Memory Mapping 120765 ms
-Removed line string 104446 ms
+Baseline 176260ms
+Memory Mapping 120765ms
+Removed line string 104446ms
+Removed std::stod() 38160ms ± 153ms
 ```

@@ -13,6 +13,3 @@ int main(int argc, char *argv[]) {
 
     std::println(stderr, "Total time: {} ms", std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count());
 }
-
-
-

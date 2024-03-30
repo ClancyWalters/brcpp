@@ -5,9 +5,9 @@
 
 namespace brc {
     struct Station {
-        double min = 100;
-        double max = -100;
-        double total = 0;
+        int32_t min = 1000;
+        int32_t max = -1000;
+        int32_t total = 0;
         uint32_t count = 0;
     };
 

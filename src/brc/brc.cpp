@@ -18,14 +18,23 @@ auto brc::execute(std::filesystem::path file_path) -> void {
 
     size_t ptr = 0;
     size_t start = 0;
+    int32_t val = 0;
     while (ptr < size - 1) {
         start = ptr;
         while (mmap[ptr] != ';') { ptr++; }
         auto name = std::string(&mmap[start], ptr++ - start);
         
-        start = ptr;
-        while (mmap[ptr] != '\n') { ptr++; }
-        auto val = std::stod(std::string(&mmap[start], ptr++ - start));
+        bool negative = mmap[ptr] == '-';
+        if (negative) { ptr++; }
+        if (mmap[ptr + 1] == '.') {
+            val = (mmap[ptr] - '0') * 10 + mmap[ptr + 2] - '0';
+            ptr += 4;
+        } else {
+            val = (mmap[ptr] - '0') * 100 + (mmap[ptr + 1] - '0') * 10 + mmap[ptr + 3] - '0';
+            ptr += 5;
+        }
+
+        val *= negative ? -1 : 1;
 
         if (stations.contains(name)) {
             auto& station = stations[name];
@@ -50,9 +59,9 @@ auto brc::execute(std::filesystem::path file_path) -> void {
 
     std::print("{}", "{");
     for (const auto& [idx, key] : std::views::enumerate(station_names)) {
-        auto min = std::ceil(stations[key].min * 10.0) / 10.0;
-        auto average = std::ceil(((double) stations[key].total / stations[key].count) * 10) / 10.0;
-        auto max = std::ceil(stations[key].max * 10.0) / 10.0;
+        auto min = std::ceil(stations[key].min) / 10.0;
+        auto average = std::ceil(((double) stations[key].total / stations[key].count)) / 10.0;
+        auto max = std::ceil(stations[key].max) / 10.0;
 
         if (idx != 0) {
             std::print("{}", ", ");
