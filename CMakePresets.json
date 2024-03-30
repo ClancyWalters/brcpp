@@ -1,0 +1,55 @@
+{
+    "version": 6,
+    "configurePresets": [
+        { 
+            "hidden": true,
+            "name": "windows-default",
+            "displayName": "Windows x64",
+            "description": "Sets Ninja generator, compilers, x64 architecture, build and install directory",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "architecture": {
+                "value": "x64",
+                "strategy": "external"
+            },
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe"
+            },
+            "vendor": {
+                "microsoft.com/VisualStudioSettings/CMake/1.0": {
+                    "hostOS": [ "Windows" ]
+                }
+            }
+        },
+
+        {
+            "name": "windows-debug",
+            "displayName": "windows x64 Debug",
+            "inherits": "windows-default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+
+        {
+            "name": "windows-reldebinf",
+            "displayName": "windows x64 ReleaseDebInf",
+            "inherits": "windows-default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+
+        {
+            "name": "windows-release",
+            "displayName": "windows x64 Release",
+            "inherits": "windows-default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ]
+
+}

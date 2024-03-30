@@ -1,0 +1,11 @@
+.vscode
+.vs
+
+out/
+
+res/measurements.txt
+res/measurements_100M.txt
+res/measurements_10M.txt
+res/measurements_1M.txt
+
+res/samples/*.res
