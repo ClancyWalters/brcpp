@@ -12,27 +12,26 @@
 #include <absl/container/node_hash_map.h>
 #include <parallel_hashmap/phmap.h>
 
-constexpr auto THREAD_COUNT = 12;
+constexpr auto THREAD_COUNT = 8;
 
 using parallel_hashmap = phmap::parallel_flat_hash_map<std::string, brc::Station, phmap::priv::hash_default_hash<std::string>, phmap::priv::hash_default_eq<std::string>, std::allocator<std::pair<const std::string, brc::Station>>, 8, std::mutex>;
+using block_hashmap = absl::node_hash_map<std::string, brc::Station>;
 
 void processBlock(mio::mmap_source& mmap, parallel_hashmap& stations, size_t start, size_t len) {
-    auto block_stations = absl::node_hash_map<std::string, brc::Station>{};
+    auto block_stations = block_hashmap{};
 
     size_t endpoint = start + len;
     size_t ptr = start;
 
     if (endpoint < mmap.mapped_length() && mmap[endpoint] != '\n') {
-        while (mmap[endpoint] != '\n') {
-            endpoint++;
-        }
+        while (mmap[endpoint++] != '\n') {}
     }
 
     if (ptr != 0) {
         while (mmap[ptr++] != '\n') {}
     }
 
-    int64_t val;
+    int16_t val;
     while (ptr < endpoint - 1) {
         start = ptr;
         while (mmap[ptr] != ';') { ptr++; }
@@ -63,19 +62,19 @@ void processBlock(mio::mmap_source& mmap, parallel_hashmap& stations, size_t sta
         }
     }
 
-    for (const auto& pair : block_stations) {
-
-        stations.lazy_emplace_l(std::move(pair.first), [&](parallel_hashmap::value_type& station){
-            station.second.count += pair.second.count;
-            station.second.total += pair.second.total;
-            if (pair.second.max > station.second.max) {
-                station.second.max = pair.second.max;
+    for (auto key : std::views::keys(block_stations)) {
+        auto value = block_stations.at(key);
+        stations.lazy_emplace_l(key, [&](parallel_hashmap::value_type& station){
+            station.second.count += value.count;
+            station.second.total += value.total;
+            if (value.max > station.second.max) {
+                station.second.max = value.max;
             } 
-            if (pair.second.min < station.second.min) {
-                station.second.min = pair.second.min;
+            if (value.min < station.second.min) {
+                station.second.min = value.min;
             }
         }, [&](const parallel_hashmap::constructor& ctor){
-            ctor(pair.first, pair.second);
+            ctor(std::move(key), std::move(value));
         });
     }
 }
@@ -92,7 +91,6 @@ auto brc::execute(std::filesystem::path file_path) -> void {
     auto threads = std::array<std::thread, THREAD_COUNT>();
 
     for (int i = 0; i < threads.size(); i++) {
-        //processBlock(mmap, stations, i * block_size, block_size);
         threads[i] = std::thread(processBlock, std::ref(mmap), std::ref(stations), i * block_size, block_size);
     }
 
@@ -118,4 +116,6 @@ auto brc::execute(std::filesystem::path file_path) -> void {
         std::print("{}={:.1f}/{:.1f}/{:.1f}", key, min, average, max);
     }
     std::println("{}", "}");
+
+    
 }

@@ -18,6 +18,9 @@ absl::node_hash_map & unordered_dense::hash 26141ms ± 732ms
 unordered_dense::map & absl::hash 31331ms ± 3039ms
 absl::node_hash_map & std::hash 30354ms ± 3369ms
 single threaded blocked 33629ms ± 403ms
-multi threaded blocked 6885ms ± 454ms
-multi threaded ram unconstrained 4214ms ± 21ms
+multi threaded 4857ms ± 83ms
+direct lazy emplace 10827ms ± 54ms
+multi threaded std::string_view  5092ms ± 15ms
+parallel hashmap in block 6866ms ± 130ms
+multi threaded with better merging 4940ms ± 35ms
 ```
