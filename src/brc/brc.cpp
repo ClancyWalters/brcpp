@@ -75,8 +75,8 @@ uint32_t brc::internal::readHash(mio::mmap_source& mmap, brc::Result& result, si
         std::string& name = result.names[index];
 
         // Entires are zero initalized so we can garentee this is a new entry
-        if (name.empty()) {
-            name = std::string(&mmap[name_start], ptr - name_start);
+        if (name.length() == 0) {
+            name = read_name;
             result.hashes.push_back(index);
             return index;
         }
@@ -96,6 +96,21 @@ size_t brc::internal::nextNewLine(mio::mmap_source& mmap, size_t ptr) {
     return ptr;
 }
 
+// Special method to convert a number in the ascii number into an int without branches created by Quan Anh Mai.
+int64_t convertIntoNumber(int32_t decimalSepPos, int64_t numberWord) {
+    int32_t shift = 28 - decimalSepPos;
+    // signed is -1 if negative, 0 otherwise
+    int64_t sign = (~numberWord << 59) >> 63;
+    int64_t designMask = ~(sign & 0xFF);
+    // Align the number to a specific position and transform the ascii to digit value
+    int64_t digits = ((numberWord & designMask) << shift) & 0x0F000F0F00L;
+    // Now digits is in the form 0xUU00TTHH00 (UU: units digit, TT: tens digit, HH: hundreds digit)
+    // 0xUU00TTHH00 * (100 * 0x1000000 + 10 * 0x10000 + 1) =
+    // 0x000000UU00TTHH00 + 0x00UU00TTHH000000 * 10 + 0xUU00TTHH00000000 * 100
+    int64_t absValue = ((digits * 0x640a0001) >> 32) & 0x3FF;
+    return (absValue ^ sign) - sign;
+}
+
 void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, size_t start, size_t len) {
     size_t block_end = nextNewLine(mmap, std::min(mmap.mapped_length() - 1, start + len));
     size_t block_start = start == 0 ? 0 : nextNewLine(mmap, start);
@@ -107,19 +122,12 @@ void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, si
 
         auto hash = readHash(mmap, result, ptr);
         auto& element = result.block_vector[hash];
-        ptr += 1;
-
-        bool negative = mmap[ptr] == '-';
-        ptr += negative;
-        if (mmap[ptr + 1] == '.') {
-            val = (mmap[ptr] - '0') * 10 + mmap[ptr + 2] - '0';
-            ptr += 4;
-        } else {
-            val = (mmap[ptr] - '0') * 100 + (mmap[ptr + 1] - '0') * 10 + mmap[ptr + 3] - '0';
-            ptr += 5;
-        }
         
-        val *= negative ? -1 : 1;
+        uint64_t number_word = *((uint64_t*)(&mmap[++ptr]));
+        int32_t decimal_pos = std::countr_zero(~number_word & 0x10101000UL);
+        ptr += (decimal_pos >> 3) + 3;
+
+        int64_t val = convertIntoNumber(decimal_pos, number_word);
 
         element.count += 1;
         element.total += val;
