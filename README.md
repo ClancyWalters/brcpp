@@ -27,4 +27,5 @@ added hashing using java's technique 5459ms ± 71ms
 leap of faith DNF
 removing memcmp 4109ms ± 33ms
 Quan Anh Mai's branchless number parsing 4115ms ± 45ms
+Artsiom Korzun fixed size work allocation (2MB) 3776ms ± 8ms
 ```

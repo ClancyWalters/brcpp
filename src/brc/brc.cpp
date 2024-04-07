@@ -2,11 +2,10 @@
 
 #include <map>
 #include <string>
-#include <fstream>
-#include <set>
 #include <ranges>
 #include <print>
 #include <thread>
+#include <atomic>
 
 // Sets byte of delimiter as 0b10000000
 // Sets any other byte as    0b00000000
@@ -108,29 +107,36 @@ int64_t convertIntoNumber(int32_t decimalSepPos, int64_t numberWord) {
     return (absValue ^ sign) - sign;
 }
 
-void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, size_t start, size_t len) {
-    size_t block_end = nextNewLine(mmap, std::min(mmap.mapped_length() - 1, start + len)) - 1;
-    size_t block_start = start == 0 ? 0 : nextNewLine(mmap, start);
+void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, std::atomic<size_t>& chunk_counter) {
+    while (true) {
+        size_t start = chunk_counter.fetch_add(brc::CHUNK_SIZE);
 
-    size_t ptr = block_start;
-    int16_t val;
-    while (ptr < block_end) {
-        auto& element = result.block_vector[readHash(mmap, result, ptr)];
-        
-        uint64_t number_word = reinterpret_cast<uint64_t&>(mmap[++ptr]);
-        int32_t decimal_pos = std::countr_zero(~number_word & 0x10101000UL);
-        ptr += (decimal_pos >> 3) + 3;
+        if (start > mmap.length()) {
+            return;
+        }
 
-        int64_t val = convertIntoNumber(decimal_pos, number_word);
+        size_t block_start = start == 0 ? 0 : nextNewLine(mmap, start);
+        size_t block_end = nextNewLine(mmap, std::min(mmap.mapped_length() - 1, start + brc::CHUNK_SIZE)) - 1;
 
-        element.count += 1;
-        element.total += val;
+        size_t ptr = block_start;
+        while (ptr < block_end) {
+            auto& element = result.block_vector[readHash(mmap, result, ptr)];
+            
+            uint64_t number_word = reinterpret_cast<uint64_t&>(mmap[++ptr]);
+            int32_t decimal_pos = std::countr_zero(~number_word & 0x10101000UL);
+            ptr += (decimal_pos >> 3) + 3;
 
-        if (val > element.max) {
-            element.max = val;
-        } 
-        if (val < element.min) {
-            element.min = val;
+            int64_t val = convertIntoNumber(decimal_pos, number_word);
+
+            element.count += 1;
+            element.total += val;
+
+            if (val > element.max) {
+                element.max = val;
+            } 
+            if (val < element.min) {
+                element.min = val;
+            }
         }
     }
 }
@@ -138,17 +144,16 @@ void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, si
 auto brc::execute(std::filesystem::path file_path) -> void {
     
     auto mmap = mio::mmap_source(file_path.string());
-    auto size = mmap.mapped_length();
-
-    auto block_size = size / THREAD_COUNT;
 
     auto threads = std::array<std::thread, THREAD_COUNT>();
 
     std::vector<Result> results{};
     results.resize(THREAD_COUNT);
 
+    std::atomic<size_t> chunk_counter = 0;
+
     for (int i = 0; i < threads.size(); i++) {
-        threads[i] = std::thread(internal::processBlock, std::ref(mmap), std::ref(results[i]), i * block_size, block_size);
+        threads[i] = std::thread(internal::processBlock, std::ref(mmap), std::ref(results[i]), std::ref(chunk_counter));
     }
 
     auto stations = std::map<std::string_view, brc::Station>();
