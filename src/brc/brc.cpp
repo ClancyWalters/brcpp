@@ -14,24 +14,21 @@ uint64_t brc::internal::findDelimiter(uint64_t word) {
     return (input - 0x0101010101010101L) & ~input & 0x8080808080808080L;
 }
 
-uint32_t brc::internal::readHash(mio::mmap_source& mmap, brc::Result& result, size_t& ptr) {
+uint32_t brc::internal::readHash(mio::mmap_source& mmap, brc::Result& result, size_t& ptr, uint64_t word) {
 
     constexpr std::array<uint64_t, 9> mask = {
-        0xFFL,                  //byte  0..=0
-        0xFFFFL,                //bytes 0..=1
-        0xFFFFFFL,              //bytes 0..=2
-        0xFFFFFFFFL,            //bytes 0..=3
-        0xFFFFFFFFFFL,          //bytes 0..=4
-        0xFFFFFFFFFFFFL,        //bytes 0..=5
-        0xFFFFFFFFFFFFFFL,      //bytes 0..=6
-        0xFFFFFFFFFFFFFFFFL,    //bytes 0..=7
-        0xFFFFFFFFFFFFFFFFL     //bytes 0..=7 (indicates no byte contains delimiter)
+        0xFFL,                  // byte  0..=0
+        0xFFFFL,                // bytes 0..=1
+        0xFFFFFFL,              // bytes 0..=2
+        0xFFFFFFFFL,            // bytes 0..=3
+        0xFFFFFFFFFFL,          // bytes 0..=4
+        0xFFFFFFFFFFFFL,        // bytes 0..=5
+        0xFFFFFFFFFFFFFFL,      // bytes 0..=6
+        0xFFFFFFFFFFFFFFFFL,    // bytes 0..=7
+        0xFFFFFFFFFFFFFFFFL     // bytes 0..=7 (indicates no byte contains delimiter)
     };
 
     size_t name_start = ptr;
-
-    // Read a 64 bit word from the mmap
-    uint64_t word = reinterpret_cast<uint64_t&>(mmap[ptr]);
 
     // Sets byte of delimiter as 0b10000000
     // Sets any other byte as    0b00000000
@@ -107,6 +104,25 @@ int64_t convertIntoNumber(int32_t decimalSepPos, int64_t numberWord) {
     return (absValue ^ sign) - sign;
 }
 
+int64_t readValue(mio::mmap_source& mmap, size_t& ptr) {
+    uint64_t number_word = reinterpret_cast<uint64_t&>(mmap[++ptr]);
+    int32_t decimal_pos = std::countr_zero(~number_word & 0x10101000UL);
+    ptr += (decimal_pos >> 3) + 3;
+    return convertIntoNumber(decimal_pos, number_word);
+}
+
+void accumulateValue(brc::Station& station, int64_t value) {
+    station.count += 1;
+    station.total += value;
+
+    if (value > station.max) {
+        station.max = value;
+    } 
+    if (value < station.min) {
+        station.min = value;
+    }
+}
+
 void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, std::atomic<size_t>& chunk_counter) {
     while (true) {
         size_t start = chunk_counter.fetch_add(brc::CHUNK_SIZE);
@@ -118,25 +134,51 @@ void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, st
         size_t block_start = start == 0 ? 0 : nextNewLine(mmap, start);
         size_t block_end = nextNewLine(mmap, std::min(mmap.mapped_length() - 1, start + brc::CHUNK_SIZE)) - 1;
 
+        size_t dist = (block_end - block_start) / 3;
+        size_t boundry1 = nextNewLine(mmap, start + dist);
+        size_t boundry2 = nextNewLine(mmap, start + dist * 2);
+
         size_t ptr = block_start;
-        while (ptr < block_end) {
-            auto& element = result.block_vector[readHash(mmap, result, ptr)];
-            
-            uint64_t number_word = reinterpret_cast<uint64_t&>(mmap[++ptr]);
-            int32_t decimal_pos = std::countr_zero(~number_word & 0x10101000UL);
-            ptr += (decimal_pos >> 3) + 3;
+        size_t ptr1 = boundry1;
+        size_t ptr2 = boundry2;
 
-            int64_t val = convertIntoNumber(decimal_pos, number_word);
+        while (ptr < boundry1 && ptr1 < boundry2 && ptr2 < block_end) {
+            uint64_t word = reinterpret_cast<uint64_t&>(mmap[ptr]);
+            uint64_t word1 = reinterpret_cast<uint64_t&>(mmap[ptr1]);
+            uint64_t word2 = reinterpret_cast<uint64_t&>(mmap[ptr2]);
 
-            element.count += 1;
-            element.total += val;
+            auto& element = result.block_vector[readHash(mmap, result, ptr, word)];
+            auto& element1 = result.block_vector[readHash(mmap, result, ptr1, word1)];
+            auto& element2 = result.block_vector[readHash(mmap, result, ptr2, word2)];
 
-            if (val > element.max) {
-                element.max = val;
-            } 
-            if (val < element.min) {
-                element.min = val;
-            }
+            int64_t val = readValue(mmap, ptr);
+            int64_t val1 = readValue(mmap, ptr1);
+            int64_t val2 = readValue(mmap, ptr2);
+
+            accumulateValue(element, val);
+            accumulateValue(element1, val1);
+            accumulateValue(element2, val2);
+        }
+
+        while (ptr < boundry1) {
+            uint64_t word = reinterpret_cast<uint64_t&>(mmap[ptr]);
+            auto& element = result.block_vector[readHash(mmap, result, ptr, word)];
+            int64_t val = readValue(mmap, ptr);
+            accumulateValue(element, val);
+        }
+
+        while (ptr1 < boundry2) {
+            uint64_t word = reinterpret_cast<uint64_t&>(mmap[ptr1]);
+            auto& element = result.block_vector[readHash(mmap, result, ptr1, word)];
+            int64_t val = readValue(mmap, ptr1);
+            accumulateValue(element, val);
+        }
+
+        while (ptr2 < block_end) {
+            uint64_t word = reinterpret_cast<uint64_t&>(mmap[ptr2]);
+            auto& element = result.block_vector[readHash(mmap, result, ptr2, word)];
+            int64_t val = readValue(mmap, ptr2);
+            accumulateValue(element, val);
         }
     }
 }

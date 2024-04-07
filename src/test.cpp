@@ -15,8 +15,6 @@
 #include <string>
 #include <string_view>
 
-#include <absl/container/flat_hash_set.h>
-
 const std::string test_directory = "../../../../res/samples/";
 
 std::string retrieve(std::string name) {
