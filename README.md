@@ -23,4 +23,6 @@ direct lazy emplace 10827ms ± 54ms
 multi threaded std::string_view  5092ms ± 15ms
 parallel hashmap in block 6866ms ± 130ms
 multi threaded with better merging 4940ms ± 35ms
+added hashing using java's technique 5459ms ± 71ms
+leap of faith DNF
 ```
