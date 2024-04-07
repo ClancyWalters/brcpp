@@ -19,7 +19,7 @@ uint64_t brc::internal::findDelimiter(uint64_t word) {
     return (input - 0x0101010101010101L) & ~input & 0x8080808080808080L;
 }
 
-brc::Station& brc::internal::readHash(mio::mmap_source& mmap, brc::Result& result, size_t& ptr) {
+uint32_t brc::internal::readHash(mio::mmap_source& mmap, brc::Result& result, size_t& ptr) {
 
     constexpr std::array<uint64_t, 9> mask = {
         0xFFL,                  //byte  0..=0
@@ -69,22 +69,21 @@ brc::Station& brc::internal::readHash(mio::mmap_source& mmap, brc::Result& resul
     // Masks bits with size of vector to limit range to that off block vector
     uint32_t index = (uint32_t)((hash ^ (hash >> 33) ^ (hash >> 15)) & (brc::BLOCK_VECTOR_SIZE - 1));
 
-    auto name_size = ptr - name_start;
+    auto read_name = std::string_view(&mmap[name_start], ptr - name_start);
 
     while (true) {
-        brc::Station& element = result.block_vector[index];
+        std::string& name = result.names[index];
 
         // Entires are zero initalized so we can garentee this is a new entry
-        if (element.count == 0) {
-            element.name_size = name_size;
-            element.name_ptr = name_start;
+        if (name.empty()) {
+            name = std::string(&mmap[name_start], ptr - name_start);
             result.hashes.push_back(index);
-            return element;
+            return index;
         }
 
         // Check for equality of names
-        if (memcmp(&mmap[element.name_ptr], &mmap[name_start], name_size) == 0) {
-            return element;
+        if (name == read_name) {
+            return index;
         }
 
         // Collisions detected, mixing index
@@ -106,8 +105,10 @@ void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, si
     while (ptr < block_end - 1) {
         start = ptr;
 
-        auto& element = readHash(mmap, result, ptr);
+        auto hash = readHash(mmap, result, ptr);
+        auto& element = result.block_vector[hash];
         ptr += 1;
+
         bool negative = mmap[ptr] == '-';
         ptr += negative;
         if (mmap[ptr + 1] == '.') {
@@ -155,7 +156,7 @@ auto brc::execute(std::filesystem::path file_path) -> void {
         
         for (auto& hash : results[i].hashes) {
             auto& hashed_element = results[i].block_vector[hash];
-            auto& combined_element = stations[std::string_view(&mmap[hashed_element.name_ptr], hashed_element.name_size)];
+            auto& combined_element = stations[results[i].names[hash]];
 
             combined_element.count += hashed_element.count;
             combined_element.total += hashed_element.total;
