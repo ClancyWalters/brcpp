@@ -1,16 +1,12 @@
 #include "brc.hpp"
 
-#include <unordered_map>
+#include <map>
 #include <string>
 #include <fstream>
 #include <set>
 #include <ranges>
 #include <print>
 #include <thread>
-
-
-#include <absl/container/node_hash_map.h>
-#include <parallel_hashmap/phmap.h>
 
 // Sets byte of delimiter as 0b10000000
 // Sets any other byte as    0b00000000
@@ -36,7 +32,7 @@ uint32_t brc::internal::readHash(mio::mmap_source& mmap, brc::Result& result, si
     size_t name_start = ptr;
 
     // Read a 64 bit word from the mmap
-    uint64_t word = *((uint64_t*)(&mmap[ptr]));
+    uint64_t word = reinterpret_cast<uint64_t&>(mmap[ptr]);
 
     // Sets byte of delimiter as 0b10000000
     // Sets any other byte as    0b00000000
@@ -54,7 +50,8 @@ uint32_t brc::internal::readHash(mio::mmap_source& mmap, brc::Result& result, si
     uint64_t hash = word & mask[word_1_delimiter_index];
 
     while (word_1_delimiter_index == 8) {
-        word = *((uint64_t*)(&mmap[ptr]));
+        word = reinterpret_cast<uint64_t&>(mmap[ptr]);
+        
         word_1_delimiter_mask = findDelimiter(word);
         word_1_delimiter_index = std::countr_zero((uint64_t)word_1_delimiter_mask) >> 3;
         ptr += word_1_delimiter_index;
@@ -112,18 +109,15 @@ int64_t convertIntoNumber(int32_t decimalSepPos, int64_t numberWord) {
 }
 
 void brc::internal::processBlock(mio::mmap_source& mmap, brc::Result& result, size_t start, size_t len) {
-    size_t block_end = nextNewLine(mmap, std::min(mmap.mapped_length() - 1, start + len));
+    size_t block_end = nextNewLine(mmap, std::min(mmap.mapped_length() - 1, start + len)) - 1;
     size_t block_start = start == 0 ? 0 : nextNewLine(mmap, start);
 
     size_t ptr = block_start;
     int16_t val;
-    while (ptr < block_end - 1) {
-        start = ptr;
-
-        auto hash = readHash(mmap, result, ptr);
-        auto& element = result.block_vector[hash];
+    while (ptr < block_end) {
+        auto& element = result.block_vector[readHash(mmap, result, ptr)];
         
-        uint64_t number_word = *((uint64_t*)(&mmap[++ptr]));
+        uint64_t number_word = reinterpret_cast<uint64_t&>(mmap[++ptr]);
         int32_t decimal_pos = std::countr_zero(~number_word & 0x10101000UL);
         ptr += (decimal_pos >> 3) + 3;
 
